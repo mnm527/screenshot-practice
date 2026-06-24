@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>スクショ練習</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
+      background: #12121f;
+      color: #eee;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: #1c1c32;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #2a2a50;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header h1 { font-size: 15px; color: #ff6b8a; letter-spacing: 0.05em; }
+    .status-badge {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: #2a2a50;
+      color: #666;
+      transition: background 0.3s, color 0.3s;
+    }
+    .status-badge.active { background: #1a3a2a; color: #4ecdc4; }
+
+    /* ── Settings ── */
+    .settings {
+      background: #1c1c32;
+      padding: 10px 16px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #2a2a50;
+    }
+    .setting-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #999;
+    }
+    select {
+      background: #0e0e22;
+      color: #eee;
+      border: 1px solid #3a3a60;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      -webkit-appearance: none;
+    }
+
+    /* ── Content area ── */
+    .content-area { padding: 14px 14px 100px; }
+
+    .content-card {
+      background: #1c1c32;
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      border-left: 4px solid transparent;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .content-card:active { opacity: 0.75; }
+    .content-card.visible { opacity: 1; transform: translateY(0); }
+    .content-card.news  { border-color: #ff6b8a; }
+    .content-card.song  { border-color: #f5a623; }
+    .content-card.topic { border-color: #4ecdc4; }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .card-header-left { flex: 1; min-width: 0; }
+
+    .card-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+      opacity: 0.75;
+    }
+    .news  .card-label { color: #ff6b8a; }
+    .song  .card-label { color: #f5a623; }
+    .topic .card-label { color: #4ecdc4; }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.45;
+      margin-bottom: 5px;
+    }
+    .card-sub {
+      font-size: 12px;
+      color: #999;
+      line-height: 1.6;
+    }
+    .card-chevron {
+      font-size: 14px;
+      color: #444;
+      margin-top: 2px;
+      flex-shrink: 0;
+      transition: color 0.2s;
+    }
+    .content-card:active .card-chevron { color: #888; }
+
+    /* ── Control button ── */
+    .control-btn {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #ff6b8a, #e94560);
+      color: white;
+      border: none;
+      border-radius: 50px;
+      padding: 15px 48px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(233, 69, 96, 0.45);
+      transition: transform 0.1s, box-shadow 0.1s, background 0.3s;
+      letter-spacing: 0.05em;
+      z-index: 20;
+      white-space: nowrap;
+    }
+    .control-btn:active {
+      transform: translateX(-50%) scale(0.95);
+      box-shadow: 0 3px 10px rgba(233, 69, 96, 0.35);
+    }
+    .control-btn.running {
+      background: linear-gradient(135deg, #555, #333);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    }
+
+    /* ── Character overlay ── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      pointer-events: none;
+      background: rgba(255, 248, 220, 0);
+    }
+    /* background fades in/out independently */
+    .overlay.playing {
+      animation: overlay-bg var(--chara-dur, 1.5s) ease forwards;
+    }
+    @keyframes overlay-bg {
+      0%   { background: rgba(255, 248, 220, 0); }
+      15%  { background: rgba(255, 248, 220, 0.93); }
+      75%  { background: rgba(255, 248, 220, 0.93); }
+      100% { background: rgba(255, 248, 220, 0); }
+    }
+
+    /* character itself slides in from right, holds, exits to left */
+    .chara-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      will-change: transform, opacity;
+      opacity: 0;
+    }
+    .chara-wrap.playing {
+      animation: chara-slide var(--chara-dur, 1.5s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    @keyframes chara-slide {
+      /* enter from right */
+      0%   { opacity: 0; transform: translateX(90vw) rotate(22deg) scale(0.5); }
+      /* land with bounce */
+      26%  { opacity: 1; transform: translateX(-16px) rotate(-7deg) scale(1.13); }
+      34%  { opacity: 1; transform: translateX(8px)  rotate(4deg)  scale(0.95); }
+      40%  { opacity: 1; transform: translateX(-4px) rotate(-2deg) scale(1.03); }
+      /* hold center — this is the screenshot window */
+      46%  { opacity: 1; transform: translateX(0) rotate(0deg) scale(1); }
+      68%  { opacity: 1; transform: translateX(0) rotate(0deg) scale(1); }
+      /* wind-up before exit */
+      74%  { opacity: 1; transform: translateX(12px) rotate(5deg) scale(1.07); }
+      /* exit to left */
+      100% { opacity: 0; transform: translateX(-90vw) rotate(-25deg) scale(0.5); }
+    }
+
+    .chara-svg { width: 200px; height: 220px; }
+
+    .chara-label {
+      margin-top: 10px;
+      font-size: 17px;
+      font-weight: 700;
+      color: #333;
+      letter-spacing: 0.05em;
+      opacity: 0;
+    }
+    .chara-wrap.playing .chara-label {
+      animation: label-fade var(--chara-dur, 1.5s) ease forwards;
+    }
+    @keyframes label-fade {
+      0%  { opacity: 0; }
+      30% { opacity: 1; }
+      70% { opacity: 1; }
+      90% { opacity: 0; }
+    }
+
+    /* ── Detail modal ── */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-sheet {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 201;
+      background: #1c1c32;
+      border-radius: 20px 20px 0 0;
+      padding: 0 0 env(safe-area-inset-bottom, 16px);
+      max-height: 80dvh;
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+    .modal-sheet.open {
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .modal-handle {
+      width: 36px; height: 4px;
+      background: #3a3a60;
+      border-radius: 2px;
+      margin: 12px auto 0;
+    }
+    .modal-inner { padding: 16px 20px 32px; }
+    .modal-type-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      margin-bottom: 10px;
+    }
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.5;
+      margin-bottom: 6px;
+    }
+    .modal-sub {
+      font-size: 13px;
+      color: #aaa;
+      line-height: 1.7;
+      margin-bottom: 18px;
+    }
+    .modal-section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: #555;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .modal-detail {
+      font-size: 14px;
+      line-height: 1.8;
+      color: #ccc;
+      margin-bottom: 18px;
+    }
+    .modal-points {
+      list-style: none;
+      margin-bottom: 18px;
+    }
+    .modal-points li {
+      font-size: 13px;
+      color: #bbb;
+      line-height: 1.7;
+      padding: 6px 0 6px 18px;
+      position: relative;
+      border-bottom: 1px solid #2a2a50;
+    }
+    .modal-points li:last-child { border-bottom: none; }
+    .modal-points li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: #555;
+    }
+    .modal-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .modal-tag {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: #2a2a50;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📸 スクショ練習</h1>
+  <div class="status-badge" id="statusBadge">停止中</div>
+</div>
+
+<div class="settings">
+  <div class="setting-group">
+    <span>出現間隔</span>
+    <select id="intervalSetting">
+      <option value="short">短め (5〜15秒)</option>
+      <option value="medium" selected>普通 (10〜25秒)</option>
+      <option value="long">長め (20〜40秒)</option>
+    </select>
+  </div>
+  <div class="setting-group">
+    <span>表示時間</span>
+    <select id="durationSetting">
+      <option value="800">0.8秒</option>
+      <option value="1200">1.2秒</option>
+      <option value="1500" selected>1.5秒</option>
+      <option value="2000">2秒</option>
+    </select>
+  </div>
+</div>
+
+<div class="content-area" id="contentArea"></div>
+
+<button class="control-btn" id="controlBtn" onclick="togglePractice()">練習開始</button>
+
+<!-- キャラクターオーバーレイ -->
+<div class="overlay" id="overlay">
+  <div class="chara-wrap" id="charaWrap">
+    <svg class="chara-svg" viewBox="0 0 210 230" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="105" cy="222" rx="60" ry="8" fill="#ddd" opacity="0.4"/>
+      <ellipse cx="105" cy="168" rx="64" ry="56" fill="white" stroke="#d8d8d8" stroke-width="2"/>
+      <circle cx="105" cy="90" r="62" fill="white" stroke="#d8d8d8" stroke-width="2"/>
+      <ellipse cx="50" cy="68" rx="14" ry="20" fill="white" stroke="#d8d8d8" stroke-width="2"/>
+      <ellipse cx="50" cy="68" rx="7" ry="12" fill="#ffd6e0"/>
+      <ellipse cx="160" cy="68" rx="14" ry="20" fill="white" stroke="#d8d8d8" stroke-width="2"/>
+      <ellipse cx="160" cy="68" rx="7" ry="12" fill="#ffd6e0"/>
+      <circle cx="84" cy="86" r="12" fill="#222"/>
+      <circle cx="88" cy="81" r="4.5" fill="white"/>
+      <circle cx="90" cy="83" r="2" fill="white" opacity="0.6"/>
+      <circle cx="126" cy="86" r="12" fill="#222"/>
+      <circle cx="130" cy="81" r="4.5" fill="white"/>
+      <circle cx="132" cy="83" r="2" fill="white" opacity="0.6"/>
+      <ellipse cx="105" cy="103" rx="5" ry="3.5" fill="#ffb3ba"/>
+      <path d="M 90 114 Q 105 130 120 114" stroke="#bbb" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <ellipse cx="70" cy="106" rx="11" ry="7" fill="#ffb3ba" opacity="0.5"/>
+      <ellipse cx="140" cy="106" rx="11" ry="7" fill="#ffb3ba" opacity="0.5"/>
+      <ellipse cx="44" cy="162" rx="17" ry="30" fill="white" stroke="#d8d8d8" stroke-width="2" transform="rotate(-18 44 162)"/>
+      <ellipse cx="166" cy="162" rx="17" ry="30" fill="white" stroke="#d8d8d8" stroke-width="2" transform="rotate(18 166 162)"/>
+      <ellipse cx="105" cy="175" rx="28" ry="22" fill="#f5f5f5"/>
+    </svg>
+    <div class="chara-label">📸 スクショ！</div>
+  </div>
+</div>
+
+<!-- 詳細モーダル -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="closeModal()"></div>
+<div class="modal-sheet" id="modalSheet">
+  <div class="modal-handle"></div>
+  <div class="modal-inner">
+    <div class="modal-type-label" id="modalTypeLabel"></div>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-sub" id="modalSub"></div>
+    <div class="modal-section-label" id="modalDetailLabel"></div>
+    <div class="modal-detail" id="modalDetail"></div>
+    <div class="modal-section-label" id="modalPointsLabel"></div>
+    <ul class="modal-points" id="modalPoints"></ul>
+    <div class="modal-tags" id="modalTags"></div>
+  </div>
+</div>
+
+<script>
+  const contents = {
+    news: [
+      {
+        title: "AIが絵を描く時代、ついに本番へ",
+        sub: "画像生成AIの進化が加速。クリエイター業界に激震が走る",
+        detail: "Stable DiffusionやMidjourney、DALL-Eなどの画像生成AIが急速に進化し、数秒でリアルな画像やイラストを生成できるように。プロイラストレーターや写真家への影響が出始めており、著作権・学習データの問題も議論になっている。",
+        points: ["AIを使うクリエイターも急増中。「敵か味方か」論争が続く", "日本でも画像生成AIを使ったLINEスタンプが登場し話題に", "Adobeなど大手もAI機能を積極的に取り込み始めた"],
+        tags: ["#AI", "#クリエイター", "#著作権", "#イラスト"]
+      },
+      {
+        title: "新幹線、最高時速600kmへ",
+        sub: "リニア技術の進歩が止まらない。東京〜大阪が最短25分に",
+        detail: "JR東海が開発を進めるリニアモーターカーが試験走行で時速600kmを突破。超電導磁石による浮上走行技術が実用化に近づいている。品川〜名古屋間の開通が計画されており、東京〜大阪間が最短25分になる予定。",
+        points: ["現在の新幹線最高速度は約320km/h（のぞみ）", "静岡県の水問題が開通の大きな課題として残る", "海外でも同技術に注目が集まりライセンス交渉も進行中"],
+        tags: ["#リニア", "#新幹線", "#鉄道", "#テクノロジー"]
+      },
+      {
+        title: "コンビニの新作スイーツが爆売れ",
+        sub: "SNSで一晩で拡散。全国の店舗で品切れ続出中",
+        detail: "セブン-イレブンから発売されたチーズケーキが、発売翌日にX（旧Twitter）でトレンド入り。「人生で一番おいしいコンビニスイーツ」という投稿が3万リポスト超え。全国的に品切れが相次ぎ、転売も問題になっている。",
+        points: ["価格は税込298円と手頃なのも人気の理由", "類似商品をローソン・ファミマも急ピッチで開発中との情報", "過去にも似た現象があった「バスチー」「シュークリーム」ブームと比較する声"],
+        tags: ["#コンビニスイーツ", "#セブン", "#バズり飯", "#スイーツ"]
+      },
+      {
+        title: "夏フェス2026、ラインナップ発表",
+        sub: "国内外の人気アーティストが集結。チケット争奪戦スタート",
+        detail: "SUMMER SONIC 2026のラインナップが発表され、海外ヘッドライナーに複数の人気グループが名を連ねた。国内勢もYOASOBI・King Gnu・Vaundyなど豪華な顔ぶれ。チケットは抽選販売で、倍率は過去最高になる見込み。",
+        points: ["大阪・幕張の2会場同時開催。各日の日程で入場可能アーティストが異なる", "キャンプサイト付きチケットは早々に完売した前年の再来が予想される", "物販のオンライン購入も同日スタートし、サーバー負荷が懸念される"],
+        tags: ["#サマソニ", "#フェス", "#夏フェス", "#音楽"]
+      },
+      {
+        title: "スマホの充電、1週間もつ時代へ",
+        sub: "新型バッテリーが実用化間近。来年の新機種に搭載予定",
+        detail: "中国のCATL（寧徳時代）が全固体電池の量産技術を発表。容量が現行リチウムイオン電池の約3倍になるとされており、スマートフォンに搭載した場合、1週間以上の待機時間が実現可能とされる。",
+        points: ["充電時間も現行の1/3程度に短縮される見込み", "発熱・発火リスクが大幅に下がるため安全性も向上", "Appleも来年モデルへの採用を検討中との報道あり"],
+        tags: ["#バッテリー", "#スマホ", "#全固体電池", "#テクノロジー"]
+      },
+      {
+        title: "カラオケランキング、意外な曲が1位",
+        sub: "今週最も歌われた曲は？10代から50代まで大ブーム",
+        detail: "カラオケDAMの週間ランキングで、昨年リリースのアニソンが首位を獲得。10代・20代だけでなく30〜50代の利用者にも広がっており、「世代を超えた名曲」として注目されている。",
+        points: ["2位・3位もアニメ関連曲が占めており、アニソンブームの根強さを示した", "ランキング上位10曲のうち7曲がアニメ主題歌または挿入歌", "昭和の名曲「およげ！たいやきくん」などが返り咲くこともある"],
+        tags: ["#カラオケ", "#アニソン", "#ランキング", "#音楽"]
+      },
+      {
+        title: "VTuberのライブ、10万人が来場",
+        sub: "オンライン×リアルの融合イベントが新記録を更新",
+        detail: "ホロライブプロダクションが主催した大型ライブイベントが、現地とオンラインを合わせて10万人を動員し過去最高記録を更新。没入型のXRステージ演出が話題となり、海外ファンからの視聴も急増した。",
+        points: ["海外視聴者比率が初めて50%を超えた", "グッズ売上もリアルイベント史上最高額を記録", "来年はさらに大きな会場でのワールドツアーが検討されているとの情報"],
+        tags: ["#VTuber", "#ホロライブ", "#ライブ", "#XR"]
+      },
+      {
+        title: "人気アニメの聖地、観光客殺到",
+        sub: "海外ファンも多数来日。地方経済に大きな効果",
+        detail: "今季放送中のアニメの舞台となった地方都市に、国内外からファンが殺到。地元商店街が公認スタンプラリーを開催し、観光客数が前年同期比で約4倍に増加。インバウンド需要の新たな形として注目されている。",
+        points: ["聖地巡礼目的のインバウンド消費単価は通常観光の約1.6倍", "地元の高校生が英語ガイドを務めるボランティア企画も人気", "アニメ終了後も継続的にファンが訪れる「持続型聖地」として成功例に"],
+        tags: ["#聖地巡礼", "#アニメ", "#インバウンド", "#観光"]
+      },
+    ],
+    song: [
+      {
+        title: "Bling-Bang-Bang-Born",
+        sub: "Creepy Nuts ／「マッシュル」OP",
+        detail: "DJ松永とR-指定からなるヒップホップユニットCreepy Nutsが2024年にリリース。アニメ「マッシュル-MASHLE-」第2期OPに起用され、中毒性の高いビートとダンスでTikTok・Reelsで世界規模のブームに。Spotifyグローバルチャートにも登場した。",
+        points: ["振り付け「BBBBダンス」が世界中でコピーされ投稿数が数百万件超", "リリースから1年以上経った今も根強くカラオケで歌われている", "Creepy Nutsはこの曲で国内外の認知度が一気に拡大した"],
+        tags: ["#CreepyNuts", "#マッシュル", "#アニソン", "#TikTok"]
+      },
+      {
+        title: "アイドル",
+        sub: "YOASOBI ／「推しの子」OP",
+        detail: "ikura（幾田りら）とAyaseからなるユニットYOASOBIが2023年にリリース。アニメ「【推しの子】」のOPとして起用され、Spotifyグローバルランキングで日本語楽曲初の1位を記録。世界190か国でチャートインし、日本音楽の歴史を塗り替えた。",
+        points: ["MVのYouTube再生数が3億回超え", "「アイドル」の英語バージョンも制作されグローバル展開", "韓国・タイ・インドネシアなどアジア各国でも大ヒット"],
+        tags: ["#YOASOBI", "#推しの子", "#アニソン", "#グローバルヒット"]
+      },
+      {
+        title: "勇者",
+        sub: "YOASOBI ／「葬送のフリーレン」OP",
+        detail: "YOASOBIが「葬送のフリーレン」第2クールOPとして制作。旅と別れをテーマにした壮大な歌詞と、フリーレンの世界観と見事にマッチした楽曲構成が高く評価された。原作ファン・アニメ勢ともに絶賛の声が続いている。",
+        points: ["ピアノアレンジバージョンも人気で「弾いてみた」動画が多数", "「アイドル」とは異なる落ち着いたアプローチでYOASOBIの幅広さを証明", "フリーレンのラストシーンと合わせて聴くと涙腺崩壊するという声も"],
+        tags: ["#YOASOBI", "#葬送のフリーレン", "#アニソン", "#泣ける"]
+      },
+      {
+        title: "一途",
+        sub: "King Gnu ／「呪術廻戦0」主題歌",
+        detail: "井口理・常田大希・勢喜遊・新井和輝の4人組バンドKing Gnuが2022年にリリース。映画「呪術廻戦0」の主題歌として採用され、乙骨憂太の一途な想いを表現した歌詞が話題に。シングルCDは50万枚以上の売上を記録した。",
+        points: ["King Gnuの代表曲のひとつとして今もライブで定番の盛り上がり曲", "呪術廻戦ファン以外にも広く知れ渡った楽曲", "カラオケで音域が広く「歌えたら尊敬される曲」として人気"],
+        tags: ["#KingGnu", "#呪術廻戦", "#アニソン", "#映画"]
+      },
+      {
+        title: "怪獣の花唄",
+        sub: "Vaundy ／2020年リリース",
+        detail: "シンガーソングライターのVaundyが2020年にリリースしたナンバー。若者から中高年まで幅広い世代に刺さる普遍的なメロディラインと、Vaundyならではの歌詞世界観が好評。発売から数年経っても衰えない人気を誇る。",
+        points: ["カバーアーティストが多く、アコースティック・バンドアレンジなど多様なバージョンが存在", "「Vaundyを知るならまずこの曲」と言われる入門曲的ポジション", "ドラマ・CM・YouTubeなど様々な場所でBGMとして使用されている"],
+        tags: ["#Vaundy", "#怪獣の花唄", "#ポップス", "#定番"]
+      },
+      {
+        title: "なんでもないや",
+        sub: "RADWIMPS ／「君の名は。」より（2016年）",
+        detail: "新海誠監督映画「君の名は。」の劇中歌としてRADWIMPSが制作。映画のクライマックスシーンで流れる感動的な一曲。リリースから10年近く経った今もカラオケランキング上位を維持し、「エモい曲」の代名詞的存在になっている。",
+        points: ["映画のシーンを思い出すだけで泣けるという声が多数", "弾き語りでも映える構成でギタリストにも人気が高い", "新海誠作品との相性が良く、他の曲（前前前世など）も根強い人気"],
+        tags: ["#RADWIMPS", "#君の名は", "#新海誠", "#エモい"]
+      },
+      {
+        title: "チキンレース",
+        sub: "ヨルシカ ／最新アルバム収録",
+        detail: "n-bunaとsuisによるユニットヨルシカの最新アルバム収録曲。疾走感あふれるサウンドとsuis独特の透明感ある歌声が融合し、若い世代を中心に話題沸騰中。歌詞の文学的な表現がヨルシカらしいと好評を博している。",
+        points: ["ヨルシカはアルバムごとにストーリーがある「コンセプトアルバム」スタイルが特徴", "バンドアレンジとオーケストラの融合が独自の世界観を生み出している", "ライブでは演出も含めて別格と言われる完成度"],
+        tags: ["#ヨルシカ", "#ロック", "#バンド", "#疾走感"]
+      },
+      {
+        title: "W/X/Y",
+        sub: "tajimaru ／謎の中毒曲",
+        detail: "シンガーソングライターtajimaruによる楽曲。キャッチーなメロディとクセになるリズムが「聴いたら頭から離れない」と口コミで広がり、TikTokでバイラルヒットを記録。本人のSNSフォロワーも一気に急増した。",
+        points: ["歌詞の意味がやや難解でファンによる解釈が多数投稿されている", "コーラス部分の振り付けを自作する配信者・Vtuberが続出", "「どこかで聴いたことある」と感じる人が多い普遍的なメロディ構成"],
+        tags: ["#tajimaru", "#バイラル", "#TikTok", "#中毒曲"]
+      },
+    ],
+    topic: [
+      {
+        title: "みんなの夏の思い出って？",
+        sub: "花火？海？宿題の追い込み？エモい思い出をシェアして",
+        detail: "夏の思い出を聞くだけで盛り上がる定番のトーク。世代によって全然違う答えが返ってくるので会話が広がりやすい。海・花火・祭りの王道から、「エアコンの前でゲームしてた」という共感必至の答えまで様々。",
+        points: ["「宿題を最後の3日でやった」は世代を超えた共感ネタ", "「一番暑かった夏の記憶」など少し角度を変えた質問もアリ", "リスナーのコメントを読み上げながら盛り上げると配信時間が伸びる"],
+        tags: ["#夏", "#思い出", "#雑談", "#共感"]
+      },
+      {
+        title: "最近ハマってるもの教えて！",
+        sub: "ゲーム・アニメ・ドラマ・グルメ・推し活…なんでもOK",
+        detail: "配信者がリスナーに「最近ハマってること」を聞くと、コメントが一気に増えるテッパンのトーク。自分のハマってることを先に話してから聞くと、リスナーも答えやすくなる。共通の趣味が見つかれば一気に距離が縮まる。",
+        points: ["「最近ハマったゲーム」「最近ハマった食べ物」と絞るとコメントしやすい", "自分が知らないものをリスナーから教えてもらう展開も楽しい", "季節ごとの「最近の推し活」は定期的に使えるネタ"],
+        tags: ["#雑談", "#ハマってる", "#リスナー参加", "#配信ネタ"]
+      },
+      {
+        title: "無人島に1つだけ持っていくなら？",
+        sub: "スマホ？ナイフ？好きな人？正直に答えてほしい",
+        detail: "定番の「無人島クイズ」だがシンプルな問いほど答えが多様で盛り上がる。実用的な答え（ナイフ、水）から爆笑必至な答え（Amazonプライム、彼氏・彼女）まで幅広いコメントが飛び交い、会話が弾みやすい。",
+        points: ["「Wi-Fiが繋がる前提で」などルールを付け加えるバリエーションもある", "配信者自身の答えを先に言ってから募集すると参加率アップ", "「2つ目は？」「なぜそれ？」と追加質問すると会話がさらに広がる"],
+        tags: ["#無人島", "#クイズ", "#盛り上がり", "#雑談"]
+      },
+      {
+        title: "深夜に食べたくなるものランキング",
+        sub: "ラーメン？お茶漬け？チョコ？罪悪感ゼロで語ろう",
+        detail: "深夜の配信で特に盛り上がりやすいトーク。「わかる！！」という共感コメントが大量に来る。ラーメン・カップ麺・アイス・チョコ・お茶漬けあたりが定番の回答で、ランキング形式にするとさらに盛り上がる。",
+        points: ["「今食べてるものを言って」というリアルタイム参加型にしても楽しい", "「罪悪感ランキング」として罪悪感の高いものを投票してもらうのもアリ", "視聴者のコメントで同じものが続いたら「今から食べに行くぞ」などの反応が受ける"],
+        tags: ["#深夜飯", "#あるある", "#共感", "#グルメ"]
+      },
+      {
+        title: "テンション爆上がりの瞬間といえば？",
+        sub: "推しの新曲・ガチャ成功・給料日…みんなの「最高」を聞かせて",
+        detail: "ポジティブな話題なのでコメント欄が明るくなる配信向きネタ。推し活勢からゲーマー・社会人まで幅広いリスナーがコメントしやすい。配信者のテンションが上がった体験を先に話すと、場の雰囲気が盛り上がる。",
+        points: ["「ガチャ天井前に出た」「推しにリプが来た」などリスナーの体験談を聞くのが楽しい", "「逆にテンション下がる瞬間は？」とセットで聞くのも鉄板", "リスナーの答えに対してリアクションをしっかりとると配信満足度が上がる"],
+        tags: ["#テンション爆上がり", "#ポジティブ", "#リスナー参加", "#雑談"]
+      },
+      {
+        title: "もし魔法が1つ使えたら？",
+        sub: "タイムリープ・空を飛ぶ・お金を無限に…何を選ぶ？",
+        detail: "答えの自由度が高いので個性が出やすいトーク。「実用的な魔法派」と「ロマン派」でリスナーが盛り上がる。「ただしこのルールがある」と制約を付け加えると議論が面白くなる。",
+        points: ["「時間を止める」「人の心が読める」など定番答えへのリアクションをあらかじめ考えておくと良い", "「この中から選んで」と選択肢を出す形式にすると参加しやすくなる", "配信者の答えに理由をしっかり語ると視聴者が引き込まれる"],
+        tags: ["#IF話", "#空想", "#盛り上がり", "#雑談"]
+      },
+      {
+        title: "苦手だけど克服したいこと",
+        sub: "早起き・片付け・電話対応…共感ボタン押しまくれそう",
+        detail: "人間の「あるある弱点」をテーマにしたトーク。「共感した！」コメントが大量に来るため盛り上がりやすい。配信者自身の弱点を正直に話すことで、リスナーとの距離感が縮まるトークテーマ。",
+        points: ["早起き・片付け・連絡の返信・電話が定番の「苦手あるある」", "「克服するために試したこと」まで話すと深みが出る", "「克服できた人は教えて！」とリスナーへのアドバイスを求める展開も◎"],
+        tags: ["#あるある", "#共感", "#弱点", "#雑談"]
+      },
+      {
+        title: "好きなゲームのジャンルは？",
+        sub: "RPG・FPS・パズル・シミュレーション…ゲーマー勢集合",
+        detail: "ゲーム配信者には特に使いやすいトーク。リスナーのゲームの好みを知ることで今後の配信ゲームの参考にもなる。ジャンル別のコメントを読み上げながら自分の意見を混ぜるだけでトークが広がる。",
+        points: ["「RPG派？アクション派？」と二択で聞くと参加しやすい", "「最近遊んだゲームは？」とセットで聞くと具体的な作品名が出てくる", "「このゲームやってほしい！」と次回配信のリクエストを受け付けるきっかけにもなる"],
+        tags: ["#ゲーム", "#ジャンル", "#ゲーマー", "#配信ネタ"]
+      },
+    ]
+  };
+
+  const typeLabels = { news: '📰 今日のニュース', song: '🎵 今週の人気曲', topic: '💬 雑談ネタ' };
+  const typeColors = { news: '#ff6b8a', song: '#f5a623', topic: '#4ecdc4' };
+  const pointsHeadings = { news: '💡 配信で使えるポイント', song: '🎤 知っておきたいこと', topic: '💬 配信での活用ヒント' };
+  const detailHeadings = { news: '📋 詳細', song: '📋 楽曲について', topic: '📋 ネタ解説' };
+  const types = ['news', 'song', 'topic'];
+
+  let isRunning = false;
+  let contentTimer = null;
+  let characterTimer = null;
+  let cardEls = {};
+  let idxMap = { news: 0, song: 0, topic: 0 };
+
+  // ── Cards ──
+  function initCards() {
+    const area = document.getElementById('contentArea');
+    area.innerHTML = '';
+    types.forEach(type => {
+      const el = document.createElement('div');
+      el.className = `content-card ${type}`;
+      el.innerHTML = `
+        <div class="card-header">
+          <div class="card-header-left">
+            <div class="card-label">${typeLabels[type]}</div>
+            <div class="card-title" id="${type}-title"></div>
+            <div class="card-sub" id="${type}-sub"></div>
+          </div>
+          <div class="card-chevron">›</div>
+        </div>
+      `;
+      el.addEventListener('click', () => openModal(type));
+      area.appendChild(el);
+      cardEls[type] = el;
+    });
+    const spacer = document.createElement('div');
+    spacer.style.height = '90px';
+    area.appendChild(spacer);
+    updateAllCards();
+  }
+
+  function updateAllCards() {
+    types.forEach(type => updateCard(type, false));
+  }
+
+  function updateCard(type, animate = true) {
+    const el = cardEls[type];
+    const item = contents[type][idxMap[type]];
+    if (animate) {
+      el.classList.remove('visible');
+      setTimeout(() => {
+        document.getElementById(`${type}-title`).textContent = item.title;
+        document.getElementById(`${type}-sub`).textContent = item.sub;
+        el.classList.add('visible');
+      }, 80);
+    } else {
+      document.getElementById(`${type}-title`).textContent = item.title;
+      document.getElementById(`${type}-sub`).textContent = item.sub;
+      requestAnimationFrame(() => el.classList.add('visible'));
+    }
+  }
+
+  function cycleRandomCard() {
+    const type = types[Math.floor(Math.random() * types.length)];
+    idxMap[type] = (idxMap[type] + 1) % contents[type].length;
+    updateCard(type, true);
+  }
+
+  // ── Modal ──
+  function openModal(type) {
+    const item = contents[type][idxMap[type]];
+    const color = typeColors[type];
+
+    const labelEl = document.getElementById('modalTypeLabel');
+    labelEl.textContent = typeLabels[type];
+    labelEl.style.color = color;
+
+    document.getElementById('modalTitle').textContent = item.title;
+    document.getElementById('modalSub').textContent = item.sub;
+
+    document.getElementById('modalDetailLabel').textContent = detailHeadings[type];
+    document.getElementById('modalDetailLabel').style.color = color;
+    document.getElementById('modalDetail').textContent = item.detail;
+
+    document.getElementById('modalPointsLabel').textContent = pointsHeadings[type];
+    document.getElementById('modalPointsLabel').style.color = color;
+    const ul = document.getElementById('modalPoints');
+    ul.innerHTML = '';
+    item.points.forEach(p => {
+      const li = document.createElement('li');
+      li.textContent = p;
+      ul.appendChild(li);
+    });
+
+    const tagsEl = document.getElementById('modalTags');
+    tagsEl.innerHTML = '';
+    item.tags.forEach(t => {
+      const span = document.createElement('span');
+      span.className = 'modal-tag';
+      span.textContent = t;
+      tagsEl.appendChild(span);
+    });
+
+    document.getElementById('modalBackdrop').classList.add('open');
+    document.getElementById('modalSheet').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    document.getElementById('modalBackdrop').classList.remove('open');
+    document.getElementById('modalSheet').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // ── Character ──
+  function getInterval() {
+    const ranges = { short: [5000, 15000], medium: [10000, 25000], long: [20000, 40000] };
+    const [mn, mx] = ranges[document.getElementById('intervalSetting').value];
+    return Math.random() * (mx - mn) + mn;
+  }
+
+  function showCharacter() {
+    const dur = parseInt(document.getElementById('durationSetting').value);
+    const overlay = document.getElementById('overlay');
+    const wrap = document.getElementById('charaWrap');
+
+    overlay.style.setProperty('--chara-dur', `${dur}ms`);
+    wrap.style.setProperty('--chara-dur', `${dur}ms`);
+
+    // reset then trigger
+    overlay.classList.remove('playing');
+    wrap.classList.remove('playing');
+    void overlay.offsetWidth; // reflow to restart animation
+
+    overlay.classList.add('playing');
+    wrap.classList.add('playing');
+
+    wrap.addEventListener('animationend', function handler() {
+      overlay.classList.remove('playing');
+      wrap.classList.remove('playing');
+      wrap.removeEventListener('animationend', handler);
+      if (isRunning) scheduleCharacter();
+    }, { once: true });
+  }
+
+  function scheduleCharacter() {
+    characterTimer = setTimeout(showCharacter, getInterval());
+  }
+
+  // ── Practice control ──
+  function togglePractice() {
+    isRunning ? stopPractice() : startPractice();
+  }
+
+  function startPractice() {
+    isRunning = true;
+    document.getElementById('controlBtn').textContent = '練習停止';
+    document.getElementById('controlBtn').classList.add('running');
+    document.getElementById('statusBadge').textContent = '練習中';
+    document.getElementById('statusBadge').classList.add('active');
+    contentTimer = setInterval(cycleRandomCard, 11000);
+    scheduleCharacter();
+  }
+
+  function stopPractice() {
+    isRunning = false;
+    clearInterval(contentTimer);
+    clearTimeout(characterTimer);
+    const overlay = document.getElementById('overlay');
+    const wrap = document.getElementById('charaWrap');
+    overlay.classList.remove('playing');
+    wrap.classList.remove('playing');
+    document.getElementById('controlBtn').textContent = '練習開始';
+    document.getElementById('controlBtn').classList.remove('running');
+    document.getElementById('statusBadge').textContent = '停止中';
+    document.getElementById('statusBadge').classList.remove('active');
+  }
+
+  initCards();
+</script>
+</body>
+</html>
